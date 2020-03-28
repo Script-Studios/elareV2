@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "1058347299615",
+    "firebase_url": "https://elare-bd2f2.firebaseio.com",
+    "project_id": "elare-bd2f2",
+    "storage_bucket": "elare-bd2f2.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1058347299615:android:5b216f76469469e853f62a",
+        "android_client_info": {
+          "package_name": "com.script.elare"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1058347299615-i1laq2buv99ilh7anbd9f8oe8bd8r898.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.script.elare",
+            "certificate_hash": "dbfaeff57738ae44d9d3310513f3802a55640153"
+          }
+        },
+        {
+          "client_id": "1058347299615-aabjmlu1tmfn99e21vtgdb8df1rv8qsj.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyApMF8NtkgV0Z94XCuh06eimEV6C0pU2Xw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1058347299615-aabjmlu1tmfn99e21vtgdb8df1rv8qsj.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

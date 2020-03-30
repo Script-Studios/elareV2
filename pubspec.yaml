@@ -32,6 +32,7 @@ dependencies:
   flame: any
   splashscreen: any
   flutter_native_splash: any
+  intro_views_flutter: any
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
@@ -70,6 +71,7 @@ flutter:
     - assets/wifi.gif
     - assets/loading.gif
     - assets/audio/ss_audio.opus
+    - assets/intro_page.jpg
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.io/assets-and-images/#resolution-aware.
   # For details regarding adding assets from package dependencies, see

@@ -2,7 +2,7 @@ import 'dart:async';
 import 'package:flame/bgm.dart';
 import 'package:flame/flame.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_story_app_concept/home.dart';
+import 'package:flutter_story_app_concept/onboarding.dart';
 
 class SplashScreenPage extends StatefulWidget {
   @override
@@ -30,7 +30,7 @@ class _SplashScreenPageState extends State<SplashScreenPage> {
             context,
             MaterialPageRoute(
               builder: (context) {
-                return Home();
+                return OnBoardingPage();
               },
             ),
           );
@@ -45,10 +45,10 @@ class _SplashScreenPageState extends State<SplashScreenPage> {
       child: AnimatedCrossFade(
         firstChild: Container(),
         secondChild: Container(
-            height: MediaQuery.of(context).size.height,
-            child: Image.asset("assets/ss.gif"),
-            color: Color(0xff0D121E),
-            ),
+          height: MediaQuery.of(context).size.height,
+          child: Image.asset("assets/ss.gif"),
+          color: Color(0xff0D121E),
+        ),
         crossFadeState:
             display ? CrossFadeState.showSecond : CrossFadeState.showFirst,
         duration: Duration(

@@ -255,6 +255,12 @@ class _NewGameState extends State<NewGame> {
   }
 
   @override
+  void dispose() {
+    bgm.stop();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     ImageShow current = shownImages.last;
     var stack = new IndexedStack(

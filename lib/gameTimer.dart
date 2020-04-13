@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:auto_size_text/auto_size_text.dart';
 import 'package:flutter/material.dart';
 
 class GameTimer extends StatefulWidget {
@@ -93,7 +94,7 @@ class _GameTimerState extends State<GameTimer> {
 
   @override
   Widget build(BuildContext context) {
-    return Text(
+    return AutoSizeText(
       (min < 10 ? "0" + min.toString() : min.toString()) +
           ":" +
           (sec < 10 ? "0" + sec.toString() : sec.toString()),

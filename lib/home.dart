@@ -1,16 +1,22 @@
+import 'dart:async';
 import 'dart:io';
-
 import 'package:auto_size_text/auto_size_text.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_story_app_concept/aboutUs.dart';
 import 'package:flutter_story_app_concept/dataClasses.dart';
 import 'package:flutter_story_app_concept/newGame.dart';
 import 'package:flutter_story_app_concept/signInPage.dart';
+import 'package:flutter_story_app_concept/tutorial.dart';
+import 'package:fluttertoast/fluttertoast.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:showcaseview/showcaseview.dart';
 import 'package:connectivity/connectivity.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class Home extends StatefulWidget {
   @override
@@ -24,12 +30,55 @@ class _HomeState extends State<Home> {
   bool homeTutorialFinished;
   GlobalKey _themeKey = new GlobalKey(), _startKey = new GlobalKey();
   bool noWifiDialogOpen = false;
+  PageController controller;
+  bool openSettings = false;
+  bool firstBack = false;
+  Timer backTimer;
+  bool themeLoading = false;
+  final GlobalKey<ScaffoldState> scaffoldKey = GlobalKey<ScaffoldState>();
+  GameTheme moveTheme;
+  bool moving = false, showAddedTheme = false;
+
+  void saveThemeCover(Map<String, String> data) async {
+    print(data);
+    FirebaseStorage firebaseStorage = FirebaseStorage.instance;
+    final Directory appDirectory = await getApplicationDocumentsDirectory();
+    SharedPreferences preferences = await SharedPreferences.getInstance();
+    final String pictureDirectory = '${appDirectory.path}/Pictures';
+    await Directory(pictureDirectory).create(recursive: true);
+    data.forEach((id, url) async {
+      var ref = await firebaseStorage.getReferenceFromUrl(url);
+      var dataBytes = await ref.getData(1024 * 1024);
+      var imagePath = '$pictureDirectory/$id.png';
+      File f = new File(imagePath);
+      await f.writeAsBytes(dataBytes);
+      await preferences.setString(id, imagePath);
+    });
+  }
+
   void getThemes() async {
+    setState(() {
+      themeLoading = true;
+    });
+    SharedPreferences preferences = await SharedPreferences.getInstance();
+    themes = new List();
+    Map<String, String> data = new Map();
     var sp = await firestore.collection('themes').getDocuments();
     for (var doc in sp.documents) {
-      themes.add(new GameTheme.fromMap(doc.data));
+      var loc = preferences.getString(doc.data['id']);
+      if (loc == null) {
+        data.addAll({
+          doc.data['id']: doc.data['cover'],
+        });
+      } else {
+        print("Downloaded");
+      }
+      setState(() {
+        themes.add(new GameTheme.fromMap(doc.data, location: loc));
+        themeLoading = false;
+      });
     }
-    setState(() {});
+    saveThemeCover(data);
   }
 
   void startGame() {
@@ -61,6 +110,7 @@ class _HomeState extends State<Home> {
                 "SWIPE",
                 style: TextStyle(
                   color: Colors.white,
+                  fontSize: 25,
                 ),
               ),
             ],
@@ -75,6 +125,7 @@ class _HomeState extends State<Home> {
                 "TIMED",
                 style: TextStyle(
                   color: Colors.white,
+                  fontSize: 22,
                 ),
               ),
               Spacer(),
@@ -82,6 +133,7 @@ class _HomeState extends State<Home> {
                 "ENDLESS",
                 style: TextStyle(
                   color: Colors.white,
+                  fontSize: 22,
                 ),
               ),
               Icon(
@@ -119,7 +171,7 @@ class _HomeState extends State<Home> {
 
   void startTutorial(BuildContext context) async {
     await Future.delayed(Duration(seconds: 1));
-    if (!homeTutorialFinished) {
+    if (homeTutorialFinished) {
       ShowCaseWidget.of(context).startShowCase([_themeKey, _startKey]);
     }
   }
@@ -132,7 +184,9 @@ class _HomeState extends State<Home> {
           await InternetAddress.lookup("www.google.com").catchError((e) {
         print(e);
       });
-      isConnected = (result.isNotEmpty && result[0].rawAddress.isNotEmpty);
+      isConnected = (result != null &&
+          result.isNotEmpty &&
+          result[0].rawAddress.isNotEmpty);
     }
     return isConnected;
   }
@@ -178,254 +232,619 @@ class _HomeState extends State<Home> {
     }
   }
 
+  void move() async {
+    await Future.delayed(const Duration(milliseconds: 250));
+    setState(() {
+      moving = true;
+    });
+    await Future.delayed(Duration(milliseconds: 750));
+    setState(() {
+      moving = false;
+      moveTheme = null;
+    });
+  }
+
   @override
   void initState() {
     super.initState();
+    controller = new PageController();
     connectivity = new Connectivity();
     connectivity.onConnectivityChanged.listen((res) async {
-      print(res);
       if (await checkConnectivity()) {
         removeDialog();
-        print("1");
       } else {
-        print(2);
         notConnectedDialog();
       }
     });
-    checkLogin();
+    //checkLogin();
     checkHomeTutorialFinished();
     getThemes();
   }
 
   @override
   Widget build(BuildContext context) {
-    return ShowCaseWidget(
-      onFinish: () async {
-        SharedPreferences pref = await SharedPreferences.getInstance();
-        homeTutorialFinished = true;
-        await pref.setBool("homeTutorialFinished", true);
+    return PageView.builder(
+      controller: controller,
+      pageSnapping: false,
+      itemCount: openSettings ? 2 : 1,
+      onPageChanged: (i) async {
+        if (i == 0) {
+          await controller.animateToPage(
+            0,
+            duration: const Duration(milliseconds: 750),
+            curve: Curves.ease,
+          );
+          setState(() {
+            openSettings = false;
+          });
+        }
       },
-      builder: Builder(
-        builder: (context) {
-          return Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  Color(0xFF1b1e44),
-                  Color(0xFF2d3447),
-                ],
-                begin: Alignment.bottomCenter,
-                end: Alignment.topCenter,
-                tileMode: TileMode.clamp,
-              ),
-            ),
-            child: Scaffold(
-              backgroundColor: Colors.transparent,
-              body: Column(
-                children: <Widget>[
-                  Padding(
-                    padding: const EdgeInsets.only(
-                      left: 12.0,
-                      right: 12.0,
-                      top: 40.0,
-                      bottom: 8.0,
+      itemBuilder: (context, i) {
+        if (i == 0) {
+          return WillPopScope(
+            child: ShowCaseWidget(
+              onFinish: () async {
+                SharedPreferences pref = await SharedPreferences.getInstance();
+                homeTutorialFinished = true;
+                await pref.setBool("homeTutorialFinished", true);
+              },
+              builder: Builder(
+                builder: (context) {
+                  return Container(
+                    decoration: BoxDecoration(
+                      color: Color(0xff081c36),
                     ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: <Widget>[
-                        Text(
-                          "ELARE",
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 46.0,
-                            letterSpacing: 15,
-                            fontWeight: FontWeight.w500,
+                    child: Scaffold(
+                      key: scaffoldKey,
+                      backgroundColor: Colors.transparent,
+                      body: Column(
+                        children: <Widget>[
+                          Spacer(
+                            flex: 1,
                           ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  SizedBox(
-                    height: MediaQuery.of(context).size.height / 25,
-                  ),
-                  Container(
-                    child: Text(
-                      "Swipe Themes to Add",
-                      style: TextStyle(
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.only(
-                        left: 12.0,
-                        right: 12.0,
-                        top: 8.0,
-                        bottom: 8.0,
-                      ),
-                      child: ListView.builder(
-                        itemBuilder: (context, i) {
-                          return Dismissible(
-                            direction: DismissDirection.startToEnd,
-                            onDismissed: (dir) {
-                              addedThemes.add(themes.removeAt(i));
-                              setState(() {});
-                            },
-                            key: new Key(themes[i].id),
-                            child: Container(
-                              margin: EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 10,
+                          Expanded(
+                            flex: 3,
+                            child: Text(
+                              "ELARE",
+                              style: TextStyle(
+                                color: Color(0xff8d9db1),
+                                fontSize: 60.0,
+                                letterSpacing: 15,
+                                fontWeight: FontWeight.w500,
                               ),
-                              height: 150,
-                              child: LayoutBuilder(
-                                builder: (c, con) {
-                                  if (i == 0) {
-                                    startTutorial(context);
-                                    return Showcase(
-                                      key: _themeKey,
-                                      child: Stack(
-                                        children: <Widget>[
-                                          Container(
+                            ),
+                          ),
+                          Spacer(
+                            flex: 1,
+                          ),
+                          Expanded(
+                            flex: 1,
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: <Widget>[
+                                Spacer(),
+                                Expanded(
+                                  flex: 2,
+                                  child: Container(
+                                    child: Text(
+                                      "Swipe Themes to Add",
+                                      style: TextStyle(
+                                          color: Color(0xff8d9db1),
+                                          fontSize: 30),
+                                    ),
+                                  ),
+                                ),
+                                Expanded(
+                                  child: IconButton(
+                                    icon: Icon(
+                                      Icons.settings,
+                                      color: Color(0xff8d9db1),
+                                    ),
+                                    onPressed: () {
+                                      setState(() {
+                                        openSettings = true;
+                                      });
+                                      controller.animateTo(
+                                        250,
+                                        duration:
+                                            const Duration(milliseconds: 500),
+                                        curve: Curves.ease,
+                                      );
+                                    },
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Stack(
+                            overflow: Overflow.clip,
+                            children: <Widget>[
+                                  themeLoading
+                                      ? Positioned(
+                                          top: MediaQuery.of(context)
+                                                  .size
+                                                  .height /
+                                              3,
+                                          left: MediaQuery.of(context)
+                                                  .size
+                                                  .width /
+                                              2,
+                                          child: CircularProgressIndicator(),
+                                        )
+                                      : SizedBox(),
+                                  Container(
+                                    height: MediaQuery.of(context).size.height /
+                                        1.4,
+                                    child: ListView.builder(
+                                      shrinkWrap: true,
+                                      itemBuilder: (context, i) {
+                                        return Dismissible(
+                                          direction: openSettings
+                                              ? null
+                                              : DismissDirection.startToEnd,
+                                          onDismissed: (dir) {
+                                            moveTheme = themes.removeAt(i);
+                                            addedThemes.add(moveTheme);
+                                            setState(() {});
+                                            move();
+                                          },
+                                          key: new Key(themes[i].id),
+                                          child: Container(
+                                            margin: EdgeInsets.symmetric(
+                                              horizontal: 10,
+                                              vertical: 20,
+                                            ),
                                             height: 150,
-                                            width: con.maxWidth,
-                                            child: ClipRRect(
-                                              borderRadius:
-                                                  BorderRadius.circular(20.0),
-                                              child: CachedNetworkImage(
-                                                imageUrl: themes[i].coverUrl,
-                                                placeholder: (context, s) =>
+                                            child: LayoutBuilder(
+                                              builder: (c, con) {
+                                                startTutorial(context);
+                                                return Stack(
+                                                  children: <Widget>[
                                                     Container(
-                                                  child: Center(
-                                                    child:
-                                                        CircularProgressIndicator(),
-                                                  ),
-                                                  color: Colors.white,
-                                                ),
-                                                fit: BoxFit.fitWidth,
-                                              ),
+                                                      height: 150,
+                                                      width: con.maxWidth,
+                                                      child: ClipRRect(
+                                                        borderRadius:
+                                                            BorderRadius
+                                                                .circular(20.0),
+                                                        child: themes[i].loc !=
+                                                                null
+                                                            ? Image.file(
+                                                                File(
+                                                                  themes[i].loc,
+                                                                ),
+                                                                fit: BoxFit
+                                                                    .fitWidth,
+                                                              )
+                                                            : CachedNetworkImage(
+                                                                imageUrl: themes[
+                                                                        i]
+                                                                    .coverUrl,
+                                                                placeholder:
+                                                                    (context,
+                                                                            s) =>
+                                                                        Container(
+                                                                  child: Center(
+                                                                    child:
+                                                                        CircularProgressIndicator(),
+                                                                  ),
+                                                                  color: Color(
+                                                                      0xffff5c48),
+                                                                ),
+                                                                fit: BoxFit
+                                                                    .fitWidth,
+                                                              ),
+                                                      ),
+                                                    ),
+                                                    Positioned(
+                                                      bottom: 10,
+                                                      left:
+                                                          (con.maxWidth - 150) /
+                                                              2,
+                                                      right:
+                                                          (con.maxWidth - 150) /
+                                                              2,
+                                                      child: Container(
+                                                        padding:
+                                                            EdgeInsets.all(3),
+                                                        decoration:
+                                                            BoxDecoration(
+                                                          borderRadius:
+                                                              BorderRadius
+                                                                  .circular(
+                                                                      20.0),
+                                                          color:
+                                                              Color(0xffff5c48),
+                                                        ),
+                                                        width: 250,
+                                                        child: AutoSizeText(
+                                                          themes[i].type0 +
+                                                              " / " +
+                                                              themes[i].type1,
+                                                          textAlign:
+                                                              TextAlign.center,
+                                                          style: TextStyle(
+                                                            color: Colors.white,
+                                                          ),
+                                                          maxLines: 1,
+                                                          minFontSize: 20,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                );
+                                              },
                                             ),
                                           ),
-                                          Positioned(
-                                            bottom: 20,
-                                            left: (con.maxWidth - 150) / 2,
-                                            right: (con.maxWidth - 150) / 2,
-                                            child: Container(
-                                              width: 250,
-                                              child: AutoSizeText(
-                                                themes[i].type0 +
-                                                    " / " +
-                                                    themes[i].type1,
-                                                style: TextStyle(
-                                                  color: Colors.white,
-                                                ),
-                                                maxLines: 1,
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                      description: "Swipe Themes to add",
-                                    );
-                                  } else {
-                                    return Stack(
+                                        );
+                                      },
+                                      itemCount: themes.length,
+                                    ),
+                                  ),
+                                  AnimatedPositioned(
+                                    bottom:
+                                        addedThemes.length > 0 ? 30.0 : -100,
+                                    left:
+                                        MediaQuery.of(context).size.width / 2 -
+                                            90,
+                                    child: Row(
                                       children: <Widget>[
                                         Container(
-                                          height: 150,
-                                          width: con.maxWidth,
-                                          child: ClipRRect(
+                                          child: FlatButton(
+                                            onPressed: addedThemes.length > 0
+                                                ? startGame
+                                                : null,
+                                            child: Container(
+                                              decoration: BoxDecoration(
+                                                color: Color(0xffff5c48),
+                                                borderRadius:
+                                                    BorderRadius.circular(20.0),
+                                              ),
+                                              child: Padding(
+                                                padding: EdgeInsets.symmetric(
+                                                    horizontal: 22.0,
+                                                    vertical: 6.0),
+                                                child: AutoSizeText(
+                                                  "Start Game",
+                                                  textAlign: TextAlign.center,
+                                                  style: TextStyle(
+                                                    color: Colors.white,
+                                                  ),
+                                                  minFontSize: 25,
+                                                  maxLines: 3,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                        Container(
+                                          decoration: BoxDecoration(
+                                            color: Color(0xffff5c48),
                                             borderRadius:
                                                 BorderRadius.circular(20.0),
-                                            child: CachedNetworkImage(
-                                              imageUrl: themes[i].coverUrl,
-                                              placeholder: (context, s) =>
-                                                  Container(
-                                                child: Center(
-                                                  child:
-                                                      CircularProgressIndicator(),
-                                                ),
-                                                color: Colors.white,
-                                              ),
-                                              fit: BoxFit.fitWidth,
-                                            ),
                                           ),
-                                        ),
-                                        Positioned(
-                                          bottom: 20,
-                                          left: (con.maxWidth - 150) / 2,
-                                          right: (con.maxWidth - 150) / 2,
-                                          child: Container(
-                                            width: 250,
-                                            child: AutoSizeText(
-                                              themes[i].type0 +
-                                                  " / " +
-                                                  themes[i].type1,
-                                              style: TextStyle(
-                                                color: Colors.white,
-                                              ),
-                                              maxLines: 1,
+                                          padding: EdgeInsets.all(5),
+                                          child: IconButton(
+                                            icon: Icon(
+                                              Icons.subject,
+                                              color: Colors.white,
                                             ),
+                                            onPressed: () {
+                                              setState(() {
+                                                showAddedTheme =
+                                                    !showAddedTheme;
+                                              });
+                                            },
+                                            color: Colors.white,
                                           ),
-                                        ),
+                                        )
                                       ],
-                                    );
-                                  }
-                                },
-                              ),
-                            ),
-                          );
-                        },
-                        itemCount: themes.length,
-                      ),
-                    ),
-                  ),
-                  Showcase(
-                    key: _startKey,
-                    child: FlatButton(
-                      onPressed: addedThemes.length > 0 ? startGame : null,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: Colors.blueAccent,
-                          borderRadius: BorderRadius.circular(20.0),
-                        ),
-                        child: Padding(
-                          padding: EdgeInsets.symmetric(
-                              horizontal: 22.0, vertical: 6.0),
-                          child: AutoSizeText(
-                            "Start Game",
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: Colors.white,
-                            ),
-                            minFontSize: 20,
-                            maxLines: 3,
-                            overflow: TextOverflow.ellipsis,
+                                    ),
+                                    duration: Duration(milliseconds: 500),
+                                  ),
+                                  showAddedTheme
+                                      ? Positioned(
+                                          bottom: 100,
+                                          left: MediaQuery.of(context)
+                                                  .size
+                                                  .width /
+                                              2,
+                                          child: Container(
+                                            height: 150,
+                                            width: 150,
+                                            padding: EdgeInsets.all(5),
+                                            decoration: BoxDecoration(
+                                              color: Color(0xffff5c48),
+                                              borderRadius:
+                                                  BorderRadius.circular(15.0),
+                                              border: Border.all(width: 1.0),
+                                            ),
+                                            child: ListView.builder(
+                                              itemCount: addedThemes.length,
+                                              itemBuilder: (context, i) {
+                                                return Container(
+                                                  padding: EdgeInsets.all(2),
+                                                  width: 137,
+                                                  child: Row(
+                                                    mainAxisAlignment:
+                                                        MainAxisAlignment
+                                                            .spaceEvenly,
+                                                    children: <Widget>[
+                                                      Container(
+                                                        height: 80,
+                                                        width: 85,
+                                                        child: ClipRRect(
+                                                          child:
+                                                              CachedNetworkImage(
+                                                            imageUrl:
+                                                                addedThemes[i]
+                                                                    .coverUrl,
+                                                            fit: BoxFit.cover,
+                                                          ),
+                                                        ),
+                                                      ),
+                                                      IconButton(
+                                                        icon: Icon(
+                                                          Icons.cancel,
+                                                          size: 20,
+                                                          color: Colors.white,
+                                                        ),
+                                                        onPressed: () {
+                                                          themes.insert(
+                                                              0,
+                                                              addedThemes
+                                                                  .removeAt(i));
+                                                          if (addedThemes
+                                                              .isEmpty)
+                                                            showAddedTheme =
+                                                                false;
+                                                          setState(() {});
+                                                        },
+                                                      )
+                                                    ],
+                                                  ),
+                                                );
+                                              },
+                                            ),
+                                          ),
+                                        )
+                                      : SizedBox(),
+                                ] +
+                                (moveTheme != null
+                                    ? [
+                                        AnimatedPositioned(
+                                          bottom: moving
+                                              ? 30.0
+                                              : MediaQuery.of(context)
+                                                      .size
+                                                      .height /
+                                                  3,
+                                          left: moving
+                                              ? MediaQuery.of(context)
+                                                          .size
+                                                          .width /
+                                                      2 +
+                                                  80
+                                              : MediaQuery.of(context)
+                                                          .size
+                                                          .width /
+                                                      2 +
+                                                  50,
+                                          child: Container(
+                                            height: 60,
+                                            width: 60,
+                                            decoration: BoxDecoration(
+                                              color: Color(0xffff5c48),
+                                              border: Border.all(width: 1.0),
+                                              borderRadius:
+                                                  BorderRadius.circular(15.0),
+                                            ),
+                                            padding: EdgeInsets.all(2),
+                                            child: ClipRRect(
+                                              borderRadius:
+                                                  BorderRadius.circular(20),
+                                              child: CachedNetworkImage(
+                                                imageUrl: moveTheme.coverUrl,
+                                                fit: BoxFit.contain,
+                                              ),
+                                            ),
+                                          ),
+                                          duration: Duration(milliseconds: 750),
+                                        ),
+                                      ]
+                                    : showAddedTheme ? [] : []),
                           ),
-                        ),
+                        ],
                       ),
                     ),
-                    description: "Start Game",
-                  ),
-                  AnimatedContainer(
-                    curve: Curves.ease,
-                    duration: Duration(milliseconds: 750),
-                    child: Text(
-                      addedThemes.length.toString(),
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 25,
-                      ),
-                    ),
-                  ),
-                  SizedBox(
-                    height: MediaQuery.of(context).size.height / 20,
-                  ),
-                ],
+                  );
+                },
               ),
             ),
+            onWillPop: () async {
+              if (firstBack) {
+                return true;
+              } else {
+                firstBack = true;
+                if (backTimer != null && backTimer.isActive) {
+                  backTimer.cancel();
+                }
+                backTimer = new Timer(
+                  const Duration(seconds: 4),
+                  () {
+                    firstBack = false;
+                  },
+                );
+                Fluttertoast.showToast(
+                  msg: "Press back again to exit",
+                  gravity: ToastGravity.BOTTOM,
+                  toastLength: Toast.LENGTH_SHORT,
+                );
+                return false;
+              }
+            },
           );
-        },
+        } else if (i == 1) {
+          return WillPopScope(
+              child: SettingsPage(),
+              onWillPop: () async {
+                await controller.animateTo(
+                  0.0,
+                  duration: const Duration(milliseconds: 1250),
+                  curve: Curves.ease,
+                );
+                setState(() {
+                  openSettings = false;
+                });
+                return false;
+              });
+        } else {
+          return null;
+        }
+      },
+    );
+  }
+}
+
+class SettingsPage extends StatefulWidget {
+  @override
+  _SettingsPageState createState() => _SettingsPageState();
+}
+
+class _SettingsPageState extends State<SettingsPage> {
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      body: ListView(
+        children: <Widget>[
+          ListTile(
+            leading: Icon(
+              Icons.settings,
+              color: Colors.white,
+              size: 40,
+            ),
+            title: Text(
+              "Settings",
+              style: TextStyle(
+                fontSize: 40,
+                color: Colors.white,
+              ),
+            ),
+          ),
+          Divider(
+            thickness: 1,
+            color: Colors.grey[500],
+          ),
+          ListTile(
+            leading: Icon(
+              Icons.audiotrack,
+              color: Colors.white,
+              size: 20,
+            ),
+            title: Text(
+              "Audio",
+              style: TextStyle(
+                fontSize: 20,
+                color: Colors.white,
+              ),
+            ),
+          ),
+          Divider(
+            thickness: 0.3,
+            color: Colors.grey,
+          ),
+          ListTile(
+            leading: Icon(
+              Icons.assessment,
+              color: Colors.white,
+              size: 20,
+            ),
+            title: Text(
+              "Game  Statistics",
+              style: TextStyle(
+                fontSize: 20,
+                color: Colors.white,
+              ),
+            ),
+          ),
+          Divider(
+            thickness: 0.3,
+            color: Colors.grey,
+          ),
+          ListTile(
+            leading: Icon(
+              Icons.lock_outline,
+              color: Colors.white,
+              size: 20,
+            ),
+            title: Text(
+              "Privacy  Policy",
+              style: TextStyle(
+                fontSize: 20,
+                color: Colors.white,
+              ),
+            ),
+            onTap: () {
+              launch("https://drive.google.com/open?id=1hmifl9fMLQkyFriWVuYLKrh6ko4Qv3_Sd9qP9q6WgC8")
+                  .catchError((e) {
+                print(e);
+              });
+            },
+          ),
+          Divider(
+            thickness: 0.3,
+            color: Colors.grey,
+          ),
+          ListTile(
+            leading: Icon(
+              Icons.play_circle_outline,
+              color: Colors.white,
+              size: 20,
+            ),
+            title: Text(
+              "How  to  Play",
+              style: TextStyle(
+                fontSize: 20,
+                color: Colors.white,
+              ),
+            ),
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => TutorialPage(),
+                ),
+              );
+            },
+          ),
+          Divider(
+            thickness: 0.3,
+            color: Colors.grey,
+          ),
+          ListTile(
+            leading: Icon(
+              IconData(59375, fontFamily: 'MaterialIcons'),
+              color: Colors.white,
+              size: 20,
+            ),
+            title: Text(
+              "About  Us",
+              style: TextStyle(
+                fontSize: 20,
+                color: Colors.white,
+              ),
+            ),
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => AboutUsPage(),
+                ),
+              );
+            },
+          ),
+        ],
       ),
     );
   }

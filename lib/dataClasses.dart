@@ -8,6 +8,7 @@ class GameTheme {
   int topScore;
   String type0, type1;
   String coverUrl;
+  String loc;
   GameTheme(
       {this.id,
       this.images,
@@ -19,7 +20,7 @@ class GameTheme {
       this.type0,
       this.type1,
       this.coverUrl});
-  GameTheme.fromMap(Map<String, dynamic> data) {
+  GameTheme.fromMap(Map<String, dynamic> data, {String location}) {
     this.images = new List.generate(
       data['images'].length,
       (i) {
@@ -37,6 +38,7 @@ class GameTheme {
     this.type1 = data['type1'];
     this.id = data['id'];
     this.coverUrl = data['cover'];
+    this.loc = location;
   }
 }
 

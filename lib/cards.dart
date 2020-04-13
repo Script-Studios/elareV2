@@ -13,14 +13,17 @@ class CardScrollWidget extends StatefulWidget {
   final List<ImageShow> images;
   final Function removeImage;
   final _CardScrollWidgetState card = new _CardScrollWidgetState();
-  CardScrollWidget(this.removeImage, this.images);
+  CardScrollWidget(
+    this.removeImage,
+    this.images,
+  );
 
   @override
   _CardScrollWidgetState createState() => card;
 }
 
 class _CardScrollWidgetState extends State<CardScrollWidget>
-    with TickerProviderStateMixin {
+    with SingleTickerProviderStateMixin {
   AnimationController cnt;
   Animation<Offset> swipe;
   Animation<double> rotate;
@@ -77,7 +80,7 @@ class _CardScrollWidgetState extends State<CardScrollWidget>
     ).animate(cnt);
     rotate = Tween<double>(
       begin: 0.0,
-      end: -0.2,
+      end: -0.4,
     ).animate(cnt);
   }
 
@@ -160,12 +163,14 @@ class _CardScrollWidgetState extends State<CardScrollWidget>
                           children: <Widget>[
                             CachedNetworkImage(
                               imageUrl: widget.images[i].image.link,
-                              placeholder: (context, s) => Container(
-                                child: Center(
-                                  child: CircularProgressIndicator(),
-                                ),
-                                color: Colors.white,
-                              ),
+                              placeholder: (context, s) {
+                                return Container(
+                                  child: Center(
+                                    child: CircularProgressIndicator(),
+                                  ),
+                                  color: Colors.white,
+                                );
+                              },
                               fit: BoxFit.cover,
                             )
                           ],

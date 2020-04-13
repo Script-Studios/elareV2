@@ -25,14 +25,18 @@ dependencies:
   cloud_firestore: any
   cloud_functions: any
   firebase_auth: any
-  cached_network_image: any
   google_sign_in: any
+  cached_network_image: any
   shared_preferences: any
   showcaseview: any
   flame: any
   splashscreen: any
   flutter_native_splash: any
   intro_slider: any
+  fluttertoast: any
+  flutter_animation_set: any
+  audioplayers: any
+  url_launcher: any
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
@@ -58,21 +62,13 @@ flutter:
 
   # To add assets to your application, add an assets section, like this:
   assets:
-    - assets/image_01.png
-    - assets/image_02.jpg
-    - assets/image_03.jpg
-    - assets/image_04.jpg
-    - assets/HPFB.jpg
-    - assets/HCCF.jpg
-    - assets/SRSS.jpg
-    - assets/PTPH.jpg
     - assets/audio/
-    - assets/ss.gif
-    - assets/wifi.gif
-    - assets/loading.gif
-    - assets/audio/ss_audio.opus
-    - assets/intro_page.jpg
-    - assets/login/
+    - assets/
+
+  fonts:
+    - family: AmaticSCBold
+      fonts:
+        - asset: assets/fonts/AmaticSC-Bold.ttf
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.io/assets-and-images/#resolution-aware.
   # For details regarding adding assets from package dependencies, see

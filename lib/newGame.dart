@@ -1,16 +1,17 @@
 import 'package:auto_size_text/auto_size_text.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:connectivity/connectivity.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flame/bgm.dart';
+import 'package:flame/flame_audio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_story_app_concept/cards.dart';
 import 'package:flutter_story_app_concept/dataClasses.dart';
 import 'package:flutter_story_app_concept/gameTimer.dart';
-import 'package:flutter_story_app_concept/signInPage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:showcaseview/showcaseview.dart';
-import 'package:flame/flame.dart';
+import 'package:flutter_animation_set/widget/transition_animations.dart';
+import 'package:flutter_animation_set/widget/behavior_animations.dart';
 
 class NewGame extends StatefulWidget {
   final List<GameTheme> themes;
@@ -35,17 +36,33 @@ class _NewGameState extends State<NewGame> {
   int life = 3;
   bool gameTutorialFinished;
   bool loading = true;
-  Bgm bgm;
+  List<Widget> lives, lifeGone;
   GlobalKey _left = new GlobalKey(),
       _right = new GlobalKey(),
       _score = new GlobalKey(),
       _time = new GlobalKey();
+  Bgm bgm;
+  int imagesLoaded = 0;
+  FlameAudio flameAudio;
+
+  void swipeAudio() {
+    flameAudio.play("swipe.mp3");
+  }
+
+  void wrongSwipeAudio() {
+    flameAudio.play("wrongSwipe.mp3");
+  }
+
+  void gameOverAudio() async {
+    bgm.play("gameOver.mp3");
+  }
 
   void loadingDialog() async {
-    await Future.delayed(const Duration(seconds: 2));
+    await Future.delayed(const Duration(seconds: 10));
     setState(() {
       loading = false;
       loadAudio();
+      startTutorial(context);
     });
   }
 
@@ -53,19 +70,42 @@ class _NewGameState extends State<NewGame> {
     if (swipes.length == 0) t.startTimer();
     var current = shownImages.removeLast();
     int correctSwipe = current.image.type;
-    if (swipe == correctSwipe)
-      score++;
-    else {
-      score--;
+    if (swipe == correctSwipe) {
+      score += 10;
+      swipeAudio();
+      //(counterKey.currentState as MultipleDigitCounterState).value = score;
+    } else {
       life -= 1;
+      wrongSwipeAudio();
+      setState(() {
+        lives.removeLast();
+        lifeGone.insert(
+          0,
+          Expanded(
+            child: YYSingleLike(),
+          ),
+        );
+        lifeRemoved();
+      });
     }
     swipes.add(
       new Swipe(image: current, swipe: swipe),
     );
     if (images.length > 0) shownImages.insert(0, images.removeAt(0));
 
-    if (life == 0) gameOver();
+    if (life == 0) {
+      bgm.stop();
+      gameOverAudio();
+      gameOver();
+    }
     setState(() {});
+  }
+
+  void lifeRemoved() async {
+    await Future.delayed(Duration(milliseconds: 1500));
+    setState(() {
+      lifeGone[0] = Spacer();
+    });
   }
 
   Future<void> shuffleImages() async {
@@ -92,7 +132,6 @@ class _NewGameState extends State<NewGame> {
 
   void gameOver() {
     t.endTimer();
-    bgm.stop();
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -105,12 +144,14 @@ class _NewGameState extends State<NewGame> {
           "Game Over",
           style: TextStyle(
             color: Colors.white,
+            fontSize: 22,
           ),
         ),
         content: Text(
           "Your Score: $score",
           style: TextStyle(
             color: Colors.white,
+            fontSize: 22,
           ),
         ),
         actions: <Widget>[
@@ -119,9 +160,11 @@ class _NewGameState extends State<NewGame> {
               "Ok",
               style: TextStyle(
                 color: Colors.white,
+                fontSize: 22,
               ),
             ),
             onPressed: () {
+              bgm.stop();
               uploadGameStats();
               Navigator.of(context).pop();
               Navigator.of(context).pushNamed('home');
@@ -134,30 +177,14 @@ class _NewGameState extends State<NewGame> {
 
   void uploadGameStats() async {
     Firestore firestore = Firestore.instance;
-    FirebaseAuth firebaseAuth = FirebaseAuth.instance;
-    var user = await firebaseAuth.currentUser();
-    if (user == null) {
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => SignInPage(),
-      );
-    }
-    String userEmail = (await firebaseAuth.currentUser()).email;
     num mode = widget.mode;
     Map<String, num> time = t.timePlayed();
     num pointsScored = score;
+    SharedPreferences preferences = await SharedPreferences.getInstance();
     List<Map<String, dynamic>> imagesSwiped = new List();
-    swipes.forEach((s) {
-      Map<String, dynamic> m = {
-        'themeId': s.image.themeId,
-        'index': s.image.imgIndex,
-        'correct':
-            (s.swipe == s.image.image.type) ? 1 : 0, //1 for true, 0 for false
-      };
-    });
+    var username = preferences.getString("username");
     await firestore.collection('games').document().setData({
-      'userEmail': userEmail,
+      'username': username,
       'mode': mode,
       'timeTaken': time,
       'pointsScored': pointsScored,
@@ -208,7 +235,6 @@ class _NewGameState extends State<NewGame> {
   }
 
   void loadAudio() async {
-    bgm = Flame.bgm;
     bgm.play("gameAudio.mp3");
   }
 
@@ -223,8 +249,8 @@ class _NewGameState extends State<NewGame> {
   }
 
   void startTutorial(BuildContext context) async {
-    await Future.delayed(Duration(seconds: 2));
     if (!gameTutorialFinished) {
+      await Future.delayed(Duration(seconds: 2));
       ShowCaseWidget.of(context).startShowCase([_left, _right, _score, _time]);
     }
   }
@@ -237,6 +263,22 @@ class _NewGameState extends State<NewGame> {
     shownImages = new List();
     swipes = new List();
     score = 0;
+    bgm = new Bgm();
+    bgm.loadAll(["gameAudio.mp3", "gameOver.mp3"]);
+    flameAudio = new FlameAudio();
+    flameAudio.loadAll(["wrongSwipe.mp3", "swipe.mp3"]);
+    lives = [
+      Expanded(
+        child: YYPumpingHeart(),
+      ),
+      Expanded(
+        child: YYPumpingHeart(),
+      ),
+      Expanded(
+        child: YYPumpingHeart(),
+      ),
+    ];
+    lifeGone = [];
     shuffleImages();
     t = new GameTimer(
       reverse: widget.mode == 0,
@@ -247,7 +289,7 @@ class _NewGameState extends State<NewGame> {
           : null,
       style: TextStyle(
         color: Colors.white,
-        fontSize: 20,
+        fontSize: 25,
       ),
       timerEnd: gameOver,
     );
@@ -256,7 +298,8 @@ class _NewGameState extends State<NewGame> {
 
   @override
   void dispose() {
-    bgm.stop();
+    bgm.clearAll();
+    flameAudio.clearAll();
     super.dispose();
   }
 
@@ -276,7 +319,7 @@ class _NewGameState extends State<NewGame> {
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: Colors.pink,
-                  fontSize: 20,
+                  fontSize: 35,
                   fontWeight: FontWeight.bold,
                   letterSpacing: 5,
                 ),
@@ -293,7 +336,6 @@ class _NewGameState extends State<NewGame> {
           },
           builder: Builder(
             builder: (context) {
-              startTutorial(context);
               return Container(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
@@ -307,62 +349,96 @@ class _NewGameState extends State<NewGame> {
                 ),
                 child: Scaffold(
                   backgroundColor: Colors.transparent,
-                  body: SingleChildScrollView(
-                    child: Column(
-                      children: <Widget>[
-                        Padding(
+                  body: Column(
+                    children: <Widget>[
+                      Spacer(
+                        flex: 2,
+                      ),
+                      /* Expanded(
+                        flex: 4,
+                        child: Padding(
                           padding: const EdgeInsets.only(
                               left: 12.0, right: 12.0, top: 40.0, bottom: 8.0),
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: <Widget>[
-                              Text(
+                              AutoSizeText(
                                 "ELARE",
+                                minFontSize: 50,
+                                maxLines: 1,
+                                maxFontSize: 60,
                                 style: TextStyle(
                                   color: Colors.white,
-                                  fontSize: 46.0,
                                   letterSpacing: 15,
-                                  fontWeight: FontWeight.w500,
+                                  fontWeight: FontWeight.bold,
                                 ),
                               ),
                             ],
                           ),
                         ),
-                        Padding(
+                      ), */
+                      Expanded(
+                        flex: 2,
+                        child: Padding(
                           padding: EdgeInsets.symmetric(
                             horizontal: 20.0,
-                            vertical: 20,
                           ),
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: <Widget>[
-                              FlatButton(
-                                onPressed: () {
-                                  //t.timState.startTimer();
-                                },
-                                child: Showcase(
-                                  key: _time,
-                                  child: Container(
-                                    decoration: BoxDecoration(
-                                      color: Color(0xFFff6e6e),
-                                      borderRadius: BorderRadius.circular(20.0),
-                                    ),
-                                    child: Center(
-                                      child: Padding(
-                                        padding: EdgeInsets.symmetric(
-                                            horizontal: 22.0, vertical: 6.0),
-                                        child: t,
+                                  Expanded(
+                                    child: AutoSizeText(
+                                      "Lives:",
+                                      minFontSize: 20,
+                                      style: TextStyle(
+                                        color: Colors.white,
                                       ),
                                     ),
                                   ),
-                                  description: "Elapsed Time." +
-                                      (widget.mode == 0
-                                          ? "\nTry to swipe as many\n images as possible\nwithin this time."
-                                          : ""),
-                                ),
-                              ),
+                                ] +
+                                lives +
+                                lifeGone +
+                                [
+                                  Spacer(),
+                                  Showcase(
+                                    key: _score,
+                                    child: Container(
+                                      decoration: BoxDecoration(
+                                        color: Color(0xFFff6e6e),
+                                        borderRadius:
+                                            BorderRadius.circular(20.0),
+                                      ),
+                                      child: Center(
+                                        child: Padding(
+                                          padding: EdgeInsets.symmetric(
+                                              horizontal: 22.0, vertical: 6.0),
+                                          child: AutoSizeText(
+                                            "Score: $score",
+                                            minFontSize: 25,
+                                            style: TextStyle(
+                                              color: Colors.white,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    description:
+                                        "Current Score. If score goes less than 0,\nthen game over!!",
+                                  ),
+                                ],
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        flex: 4,
+                        child: Padding(
+                          padding: const EdgeInsets.only(
+                              left: 12.0, right: 12.0, top: 40.0, bottom: 8.0),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                            children: <Widget>[
                               Showcase(
-                                key: _score,
+                                key: _time,
                                 child: Container(
                                   decoration: BoxDecoration(
                                     color: Color(0xFFff6e6e),
@@ -371,29 +447,37 @@ class _NewGameState extends State<NewGame> {
                                   child: Center(
                                     child: Padding(
                                       padding: EdgeInsets.symmetric(
-                                          horizontal: 22.0, vertical: 6.0),
-                                      child: Text(
-                                        "Score: $score",
-                                        style: TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 20,
-                                        ),
+                                        horizontal: 22.0,
+                                        vertical: 6.0,
                                       ),
+                                      child: t,
                                     ),
                                   ),
                                 ),
-                                description:
-                                    "Current Score. If score goes less than 0,\nthen game over!!",
+                                description: "Elapsed Time." +
+                                    (widget.mode == 0
+                                        ? "\nTry to swipe as many\n images as possible\nwithin this time."
+                                        : ""),
                               ),
                             ],
                           ),
                         ),
-                        SizedBox(
-                          child: cards,
-                          height: 400,
-                          width: 400 * widgetAspectRatio,
+                      ),
+                      Expanded(
+                        flex: 13,
+                        child: LayoutBuilder(
+                          builder: (context, cons) {
+                            return SizedBox(
+                              child: cards,
+                              height: cons.biggest.height,
+                              width: cons.biggest.height * widgetAspectRatio,
+                            );
+                          },
                         ),
-                        Padding(
+                      ),
+                      Expanded(
+                        flex: 2,
+                        child: Padding(
                           padding: const EdgeInsets.only(left: 20.0),
                           child: Row(
                             children: <Widget>[
@@ -416,14 +500,15 @@ class _NewGameState extends State<NewGame> {
                                       ),
                                       child: Padding(
                                         padding: EdgeInsets.symmetric(
-                                            horizontal: 22.0, vertical: 6.0),
+                                            horizontal: 22.0),
                                         child: AutoSizeText(
                                           current.type0,
                                           textAlign: TextAlign.center,
+                                          minFontSize: 22,
                                           style: TextStyle(
                                             color: Colors.white,
                                           ),
-                                          maxLines: 5,
+                                          maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
                                         ),
                                       ),
@@ -452,10 +537,11 @@ class _NewGameState extends State<NewGame> {
                                         ),
                                         child: Padding(
                                           padding: EdgeInsets.symmetric(
-                                              horizontal: 22.0, vertical: 6.0),
+                                              horizontal: 22.0),
                                           child: AutoSizeText(
                                             current.type1,
                                             textAlign: TextAlign.center,
+                                            minFontSize: 22,
                                             style: TextStyle(
                                               color: Colors.white,
                                             ),
@@ -474,25 +560,11 @@ class _NewGameState extends State<NewGame> {
                             ],
                           ),
                         ),
-                        Padding(
-                          padding: const EdgeInsets.only(
-                              left: 12.0, right: 12.0, top: 40.0, bottom: 8.0),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: <Widget>[
-                              Text(
-                                "Lives Remaining :  $life",
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 20.0,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
+                      ),
+                      Spacer(
+                        flex: 1,
+                      ),
+                    ],
                   ),
                 ),
               );

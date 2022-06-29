@@ -1,31 +1,28 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:connectivity/connectivity.dart';
-import 'package:firebase_storage/firebase_storage.dart';
-import 'package:flame/flame.dart';
-import 'package:flame/flame_audio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_story_app_concept/home.dart';
-import 'package:flutter_story_app_concept/onboarding.dart';
-import 'package:flutter_story_app_concept/signInPage.dart';
+import 'package:flutter_story_app_concept/main.dart';
+import 'package:flutter_story_app_concept/tutorial.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:path_provider/path_provider.dart';
 
 class SplashScreenPage extends StatefulWidget {
   @override
   _SplashScreenPageState createState() => _SplashScreenPageState();
 }
 
-class _SplashScreenPageState extends State<SplashScreenPage> {
-  Timer t1, t2;
-  Timer dl, checkNetwork;
+class _SplashScreenPageState extends State<SplashScreenPage>
+    with WidgetsBindingObserver {
+  Timer t1, t2, logo;
+  Timer checkNetwork;
   int dots = 0;
-  bool display = false;
   bool onBoardingDone, loggedIn;
-  FlameAudio audio;
   bool downloading = true, connected;
   Map<String, String> rem = new Map();
   Connectivity connectivity;
+  bool ssOver = false;
+  bool logoChange = false;
 
   Future<bool> checkConnectivity() async {
     var res = await connectivity.checkConnectivity();
@@ -46,6 +43,7 @@ class _SplashScreenPageState extends State<SplashScreenPage> {
     SharedPreferences preferences = await SharedPreferences.getInstance();
     onBoardingDone = preferences.getBool("onBoardingDone");
     if (onBoardingDone == null) onBoardingDone = false;
+    onBoardingDone = true; //remove this line when you want to keep onboarding
   }
 
   void checkLoggedIn() async {
@@ -54,7 +52,184 @@ class _SplashScreenPageState extends State<SplashScreenPage> {
     if (loggedIn == null) loggedIn = false;
   }
 
-  /* void firstInstall() async {
+  void checkNetworkTimer() {
+    checkNetwork = Timer.periodic(Duration(seconds: 10), (t) async {
+      if (await checkConnectivity()) {
+        connected = true;
+      } else {
+        connected = false;
+      }
+      if (this.mounted) setState(() {});
+    });
+  }
+
+  void logoTimer() {
+    logo = new Timer(Duration(milliseconds: 2500), () {
+      if (this.mounted && connected != null && connected)
+        setState(() {
+          logoChange = !logoChange;
+        });
+    });
+  }
+
+  void afterTimer() {
+    if (connected) {
+      if (!onBoardingDone || !loggedIn) {
+        Navigator.of(context).pop();
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) {
+              return TutorialPage(firstInstall: true);
+            },
+          ),
+        );
+      } else {
+        stopAudio();
+        flameAudio.clear("ss_audio.mp3");
+        Navigator.of(context).pop();
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) {
+              return HomePage();
+            },
+          ),
+        );
+      }
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    print(state);
+    if (state == AppLifecycleState.inactive) {
+      if (this.mounted) ap.setVolume(0);
+    } else if (state == AppLifecycleState.resumed) {
+      if (this.mounted) ap.setVolume(1);
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    if (checkNetwork != null) checkNetwork.cancel();
+    if (logo != null && logo.isActive) logo.cancel();
+    super.dispose();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    loadAudioPlayers();
+    checkOnboarding();
+    checkLoggedIn();
+    connectivity = new Connectivity();
+    //firstInstall();
+    connectivity.onConnectivityChanged.listen((res) async {
+      if (await checkConnectivity()) {
+        connected = true;
+        if (t2 != null && !t2.isActive) {
+          setState(() {
+            logoChange = !logoChange;
+          });
+          await Future.delayed(Duration(milliseconds: 1500));
+          afterTimer();
+        }
+      } else {
+        connected = false;
+      }
+      if (this.mounted) setState(() {});
+    });
+    logoTimer();
+    t2 = new Timer(const Duration(milliseconds: 6000), afterTimer);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    String d = "";
+    for (int i = 0; i < dots; i++) {
+      d += ".";
+    }
+    int index;
+    if (ssOver) {
+      if (onBoardingDone) {
+        if (!loggedIn) {
+          index = 1;
+        }
+      } else {
+        index = 1;
+      }
+    } else {
+      index = 0;
+    }
+    var stack = IndexedStack(index: index, children: <Widget>[
+      Scaffold(
+        backgroundColor: Color(0xff0b0f1b),
+        body: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: <Widget>[
+            connected != null && !connected ? Spacer() : SizedBox(),
+            Expanded(
+              flex: 3,
+              child: Center(
+                child: AnimatedCrossFade(
+                  firstChild: Center(
+                    child: Hero(
+                      tag: 'elare',
+                      child: Text(
+                        "ELARE",
+                        style: TextStyle(
+                          color: Color(0xff8d9db1),
+                          fontSize: 60.0,
+                          letterSpacing: 15,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ),
+                  secondChild: Container(
+                    height: MediaQuery.of(context).size.height,
+                    child: Image.asset("assets/ss.gif"),
+                    color: Color(0xff0b0f1b),
+                  ),
+                  crossFadeState: logoChange
+                      ? CrossFadeState.showFirst
+                      : CrossFadeState.showSecond,
+                  secondCurve: Curves.easeInOutExpo,
+                  firstCurve: Curves.easeInOutExpo,
+                  duration: Duration(
+                    milliseconds: 1500,
+                  ),
+                ),
+              ),
+            ),
+            connected != null && !connected
+                ? Expanded(
+                    flex: 1,
+                    child: Text(
+                      "No Internet Connected!",
+                      style: TextStyle(
+                        color: Colors.red,
+                        fontSize: 25.0,
+                      ),
+                    ),
+                  )
+                : SizedBox(),
+          ],
+        ),
+      ),
+    ]
+        //+ (ssOver && !onBoardingDone ? [OnBoardingPage()] : []) +
+        //  (ssOver && onBoardingDone && !loggedIn ? [SignInPage()] : []),
+        );
+    return stack;
+  }
+}
+
+/* void firstInstall() async {
     SharedPreferences preferences = await SharedPreferences.getInstance();
     Map<String, String> audios = {
       "gameAudio.mp3":
@@ -73,7 +248,7 @@ class _SplashScreenPageState extends State<SplashScreenPage> {
     });
   } */
 
-  /* void downloadAudio() async {
+/* void downloadAudio() async {
     dl = new Timer.periodic(Duration(milliseconds: 300), (t) {
       dots += 1;
       dots %= 5;
@@ -119,99 +294,7 @@ class _SplashScreenPageState extends State<SplashScreenPage> {
     );
   } */
 
-  void checkNetworkTimer() {
-    checkNetwork = Timer.periodic(Duration(seconds: 10), (t) async {
-      if (await checkConnectivity()) {
-        connected = true;
-      } else {
-        connected = false;
-      }
-      if (this.mounted) setState(() {});
-    });
-  }
-
-  @override
-  void dispose() {
-    if (dl != null) dl.cancel();
-    if (checkNetwork != null) checkNetwork.cancel();
-    super.dispose();
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    checkOnboarding();
-    checkLoggedIn();
-    connectivity = new Connectivity();
-    //firstInstall();
-    connectivity.onConnectivityChanged.listen((res) async {
-      if (await checkConnectivity()) {
-        connected = true;
-      } else {
-        connected = false;
-      }
-      if (this.mounted) setState(() {});
-    });
-    audio = Flame.audio;
-    t1 = new Timer(const Duration(milliseconds: 250), () {
-      setState(() {
-        display = true;
-      });
-      audio.clearAll();
-      audio.play("ss_audio.mp3");
-      t2 = new Timer(
-        const Duration(milliseconds: 5000),
-        () {
-          audio.clearAll();
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-              builder: (context) {
-                if (!onBoardingDone)
-                  return OnBoardingPage();
-                else if (!loggedIn) {
-                  return SignInPage();
-                } else
-                  return Home();
-              },
-            ),
-          );
-        },
-      );
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    String d = "";
-    for (int i = 0; i < dots; i++) {
-      d += ".";
-    }
-    return Scaffold(
-      backgroundColor: Color(0xff0b0f1b),
-      body: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: <Widget>[
-          Expanded(
-            flex: 3,
-            child: Center(
-              child: AnimatedCrossFade(
-                firstChild: Container(),
-                secondChild: Container(
-                  height: MediaQuery.of(context).size.height,
-                  child: Image.asset("assets/ss.gif"),
-                  color: Color(0xff0b0f1b),
-                ),
-                crossFadeState: display
-                    ? CrossFadeState.showSecond
-                    : CrossFadeState.showFirst,
-                duration: Duration(
-                  seconds: 2,
-                ),
-              ),
-            ),
-          ),
-          /* rem != null && rem.length > 0 && downloading && connected
+/* rem != null && rem.length > 0 && downloading && connected
               ? Expanded(
                   flex: 1,
                   child: Column(
@@ -240,22 +323,4 @@ class _SplashScreenPageState extends State<SplashScreenPage> {
                     ],
                   ),
                 )
-              : connected != null && !connected
-                  ? Expanded(
-                      flex: 1,
-                      child: Text(
-                        "No Internet Connected!",
-                        style: TextStyle(
-                          color: Colors.red,
-                          fontSize: 25.0,
-                        ),
-                      ),
-                    )
-                  : Spacer(
-                      flex: 1,
-                    ), */
-        ],
-      ),
-    );
-  }
-}
+              : */

@@ -31,13 +31,29 @@ List<String> names1 = new List.generate(101, (i) {
 
 class Dummy extends StatelessWidget {
   const Dummy({Key key}) : super(key: key);
+  void duF() async {
+    Firestore ch = Firestore.instance;
+    ch.collection('dummy').snapshots().listen((qs) {
+      print(qs.documents);
+      qs.documents.forEach((s) {
+        print(s.data);
+      });
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: Center(
-        child: RaisedButton(
-          /* onPressed: () async {
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: <Widget>[
+            RaisedButton(
+              onPressed: duF,
+            ),
+            RaisedButton(
+              onPressed: () {},
+              /* onPressed: () async {
             Firestore firestore = Firestore.instance;
             var sp = await firestore.collection('themes').getDocuments();
             sp.documents.forEach((doc) async {
@@ -55,7 +71,7 @@ class Dummy extends StatelessWidget {
               });
             });
           }, */
-          onPressed: () async {
+              /* onPressed: () async {
             FirebaseStorage fs = FirebaseStorage.instance;
             Firestore firestore = Firestore.instance;
             List<Map<String, dynamic>> images = new List();
@@ -91,7 +107,7 @@ class Dummy extends StatelessWidget {
             var doc = qs.documents.first;
             doc.reference.updateData({'images': images});
           },
-          /* onPressed: () async {
+           */ /* onPressed: () async {
             Firestore f = Firestore.instance;
             FirebaseStorage firebaseStorage = FirebaseStorage.instance;
             List<String> n = ['home_alone.jpeg', 'spongebob.jpeg'];
@@ -112,6 +128,8 @@ class Dummy extends StatelessWidget {
                 });
             });
           }, */
+            ),
+          ],
         ),
       ),
     );

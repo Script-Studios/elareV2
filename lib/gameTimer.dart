@@ -2,6 +2,70 @@ import 'dart:async';
 import 'package:auto_size_text/auto_size_text.dart';
 import 'package:flutter/material.dart';
 
+class CounterWidget extends StatefulWidget {
+  _CounterWidgetState cnt = new _CounterWidgetState();
+
+  void reset() {
+    cnt.reset();
+  }
+
+  int get counter => cnt.getCounter;
+
+  @override
+  _CounterWidgetState createState() => cnt;
+}
+
+class _CounterWidgetState extends State<CounterWidget> {
+  int counter;
+  Timer t;
+
+  void reset() {
+    counter = 7;
+    setState(() {});
+    if (t != null) t.cancel();
+    t = new Timer.periodic(Duration(milliseconds: 1000), (t) {
+      if (this.mounted && counter > 0) {
+        setState(() {
+          counter -= 1;
+        });
+      }
+    });
+  }
+
+  int get getCounter => counter;
+
+  @override
+  void initState() {
+    super.initState();
+    reset();
+  }
+
+  @override
+  void dispose() {
+    t.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedCrossFade(
+      firstChild: Container(),
+      secondChild: Container(
+        child: Text(
+          counter.toString(),
+          style: TextStyle(
+            fontSize: 50,
+            color: counter <= 3 ? Colors.redAccent : Colors.white,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      ),
+      crossFadeState: CrossFadeState.showSecond,
+      duration: Duration(milliseconds: 1000),
+    );
+  }
+}
+
 class GameTimer extends StatefulWidget {
   final TextStyle style;
   final bool reverse;
@@ -38,7 +102,7 @@ class GameTimer extends StatefulWidget {
     return m;
   }
 
-  bool isActive() => timState.t.isActive;
+  bool isActive() => timState.t != null && timState.t.isActive;
   final _GameTimerState timState = new _GameTimerState();
   @override
   _GameTimerState createState() => timState;
@@ -88,7 +152,7 @@ class _GameTimerState extends State<GameTimer> {
 
   @override
   void dispose() {
-    if (t.isActive) t.cancel();
+    if (t != null && t.isActive) t.cancel();
     super.dispose();
   }
 

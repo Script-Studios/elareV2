@@ -11,12 +11,9 @@ class CardScrollWidget extends StatefulWidget {
   final padding = 20.0;
   final verticalInset = 20.0;
   final List<ImageShow> images;
-  final Function removeImage;
+  Function removeImage;
   final _CardScrollWidgetState card = new _CardScrollWidgetState();
-  CardScrollWidget(
-    this.removeImage,
-    this.images,
-  );
+  CardScrollWidget(this.removeImage, this.images);
 
   @override
   _CardScrollWidgetState createState() => card;
@@ -134,51 +131,85 @@ class _CardScrollWidgetState extends State<CardScrollWidget>
                         begin: 0.0,
                         end: 0.0,
                       ).animate(cnt),
-                child: Dismissible(
-                  direction: DismissDirection.horizontal,
-                  key: new Key(
-                    widget.images[i].themeId +
-                        widget.images[i].imgIndex.toString(),
-                  ),
-                  onDismissed: (dir) {
-                    widget.removeImage(
-                        dir == DismissDirection.startToEnd ? 1 : 0);
-                    setState(() {});
-                  },
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(16.0),
-                    child: Container(
-                      decoration: BoxDecoration(
-                          color: Colors.white,
-                          boxShadow: [
-                            BoxShadow(
-                                color: Colors.black12,
-                                offset: Offset(3.0, 6.0),
-                                blurRadius: 10.0)
-                          ]),
-                      child: AspectRatio(
-                        aspectRatio: cardAspectRatio,
-                        child: Stack(
-                          fit: StackFit.expand,
-                          children: <Widget>[
-                            CachedNetworkImage(
-                              imageUrl: widget.images[i].image.link,
-                              placeholder: (context, s) {
-                                return Container(
-                                  child: Center(
-                                    child: CircularProgressIndicator(),
-                                  ),
-                                  color: Colors.white,
-                                );
-                              },
-                              fit: BoxFit.cover,
-                            )
-                          ],
+                child: i == frontIndex - 1
+                    ? Dismissible(
+                        direction: DismissDirection.horizontal,
+                        key: new Key(
+                          widget.images[i].themeId +
+                              widget.images[i].imgIndex.toString(),
+                        ),
+                        onDismissed: (dir) {
+                          widget.removeImage(
+                              dir == DismissDirection.startToEnd ? 1 : 0);
+                          setState(() {});
+                        },
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(16.0),
+                          child: Container(
+                            decoration: BoxDecoration(
+                                color: Colors.white,
+                                boxShadow: [
+                                  BoxShadow(
+                                      color: Colors.black12,
+                                      offset: Offset(3.0, 6.0),
+                                      blurRadius: 10.0)
+                                ]),
+                            child: AspectRatio(
+                              aspectRatio: cardAspectRatio,
+                              child: Stack(
+                                fit: StackFit.expand,
+                                children: <Widget>[
+                                  CachedNetworkImage(
+                                    imageUrl: widget.images[i].image.link,
+                                    placeholder: (context, s) {
+                                      return Container(
+                                        child: Center(
+                                          child: CircularProgressIndicator(),
+                                        ),
+                                        color: Colors.white,
+                                      );
+                                    },
+                                    fit: BoxFit.fill,
+                                  )
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      )
+                    : ClipRRect(
+                        borderRadius: BorderRadius.circular(16.0),
+                        child: Container(
+                          decoration: BoxDecoration(
+                              color: Colors.white,
+                              boxShadow: [
+                                BoxShadow(
+                                    color: Colors.black12,
+                                    offset: Offset(3.0, 6.0),
+                                    blurRadius: 10.0)
+                              ]),
+                          child: AspectRatio(
+                            aspectRatio: cardAspectRatio,
+                            child: Stack(
+                              fit: StackFit.expand,
+                              children: <Widget>[
+                                CachedNetworkImage(
+                                  imageUrl: widget.images[i].image.link,
+                                  placeholder: (context, s) {
+                                    return Container(
+                                      child: Center(
+                                        child: CircularProgressIndicator(),
+                                      ),
+                                      color: Colors.white,
+                                    );
+                                  },
+                                  fit: BoxFit.cover,
+                                )
+                              ],
+                            ),
+                          ),
                         ),
                       ),
-                    ),
-                  ),
-                ),
               ),
             ),
           );

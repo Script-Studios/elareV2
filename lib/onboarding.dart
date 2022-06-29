@@ -1,12 +1,8 @@
-import 'dart:async';
-import 'dart:io';
-import 'package:audioplayers/audioplayers.dart';
 import 'package:auto_size_text/auto_size_text.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:flame/bgm.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_story_app_concept/main.dart';
 import 'package:flutter_story_app_concept/signInPage.dart';
-import 'package:fluttertoast/fluttertoast.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class OnBoardingPage extends StatefulWidget {
@@ -14,7 +10,8 @@ class OnBoardingPage extends StatefulWidget {
   _OnBoardingPageState createState() => _OnBoardingPageState();
 }
 
-class _OnBoardingPageState extends State<OnBoardingPage> {
+class _OnBoardingPageState extends State<OnBoardingPage>
+    with WidgetsBindingObserver {
   PageController cont;
   int pos = 0;
   List<Color> colors = [
@@ -42,7 +39,6 @@ class _OnBoardingPageState extends State<OnBoardingPage> {
     "https://firebasestorage.googleapis.com/v0/b/elare-bd2f2.appspot.com/o/assets%2Fintro3.png?alt=media&token=034233e8-ed68-43a1-927b-d885efe4d44f",
     "https://firebasestorage.googleapis.com/v0/b/elare-bd2f2.appspot.com/o/assets%2Fintro4.png?alt=media&token=bb684d64-9946-4504-abb8-481296834c27",
   ];
-  Bgm bgm;
 
   Widget nextButton(int i) {
     if (i == titles.length - 1) {
@@ -153,20 +149,29 @@ class _OnBoardingPageState extends State<OnBoardingPage> {
   }
 
   void startMusic() async {
-    bgm = new Bgm();
-    await bgm.load("onboard.mp3");
-    bgm.play("onboard.mp3");
+    playBgm("onboard.mp3");
+  }
+
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (state == AppLifecycleState.paused) {
+      bgm.pause();
+    } else if (state == AppLifecycleState.resumed) {
+      bgm.resume();
+    }
   }
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     startMusic();
     cont = new PageController();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     bgm.stop();
     bgm.clearAll();
     super.dispose();
@@ -174,118 +179,123 @@ class _OnBoardingPageState extends State<OnBoardingPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      child: PageView.builder(
-          controller: cont,
-          itemCount: titles.length,
-          itemBuilder: (context, i) {
-            return Scaffold(
-              backgroundColor: colors[i],
-              body: Column(
-                children: <Widget>[
-                  Spacer(
-                    flex: 1,
-                  ),
-                  i < titles.length - 1
-                      ? Expanded(
-                          flex: 1,
-                          child: Align(
-                            child: skipButton(i),
-                            alignment: Alignment.centerRight,
+    return WillPopScope(
+      onWillPop: () async {
+        return false;
+      },
+      child: Container(
+        child: PageView.builder(
+            controller: cont,
+            itemCount: titles.length,
+            itemBuilder: (context, i) {
+              return Scaffold(
+                backgroundColor: colors[i],
+                body: Column(
+                  children: <Widget>[
+                    Spacer(
+                      flex: 1,
+                    ),
+                    i < titles.length - 1
+                        ? Expanded(
+                            flex: 1,
+                            child: Align(
+                              child: skipButton(i),
+                              alignment: Alignment.centerRight,
+                            ),
+                          )
+                        : Spacer(
+                            flex: 1,
                           ),
-                        )
-                      : Spacer(
-                          flex: 1,
+                    Spacer(
+                      flex: 1,
+                    ),
+                    Expanded(
+                      flex: 3,
+                      child: Text(
+                        titles[i],
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 30,
                         ),
-                  Spacer(
-                    flex: 1,
-                  ),
-                  Expanded(
-                    flex: 3,
-                    child: Text(
-                      titles[i],
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 30,
                       ),
                     ),
-                  ),
-                  Expanded(
-                    flex: 6,
-                    child: CachedNetworkImage(
-                      imageUrl: images[i],
-                      placeholder: (context, s) {
-                        return Container(
-                          child: Center(
-                            child: CircularProgressIndicator(
-                              backgroundColor: Colors.white,
-                            ),
-                          ),
-                          color: colors[i],
-                        );
-                      },
-                      errorWidget: (context, s, o) {
-                        return Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: <Widget>[
-                              Icon(
-                                Icons.error_outline,
-                                color: Colors.white,
+                    Expanded(
+                      flex: 6,
+                      child: CachedNetworkImage(
+                        imageUrl: images[i],
+                        placeholder: (context, s) {
+                          return Container(
+                            child: Center(
+                              child: CircularProgressIndicator(
+                                backgroundColor: Colors.white,
                               ),
-                              Text(
-                                "Error loading",
-                                style: TextStyle(
+                            ),
+                            color: colors[i],
+                          );
+                        },
+                        errorWidget: (context, s, o) {
+                          return Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: <Widget>[
+                                Icon(
+                                  Icons.error_outline,
                                   color: Colors.white,
                                 ),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                  Spacer(
-                    flex: 1,
-                  ),
-                  Expanded(
-                    flex: 2,
-                    child: Text(
-                      desc[i],
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 20,
+                                Text(
+                                  "Error loading",
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
                       ),
                     ),
-                  ),
-                  Expanded(
-                    flex: 1,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: <Widget>[
-                        i > 0
-                            ? Expanded(
-                                child: backButton(i),
-                              )
-                            : Spacer(),
-                        i < titles.length - 1
-                            ? Expanded(
-                                child: nextButton(i),
-                              )
-                            : Expanded(
-                                child: doneButton(i),
-                              ),
-                      ],
+                    Spacer(
+                      flex: 1,
                     ),
-                  ),
-                  Spacer(
-                    flex: 1,
-                  ),
-                ],
-              ),
-            );
-          }),
+                    Expanded(
+                      flex: 2,
+                      child: Text(
+                        desc[i],
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 20,
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      flex: 1,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: <Widget>[
+                          i > 0
+                              ? Expanded(
+                                  child: backButton(i),
+                                )
+                              : Spacer(),
+                          i < titles.length - 1
+                              ? Expanded(
+                                  child: nextButton(i),
+                                )
+                              : Expanded(
+                                  child: doneButton(i),
+                                ),
+                        ],
+                      ),
+                    ),
+                    Spacer(
+                      flex: 1,
+                    ),
+                  ],
+                ),
+              );
+            }),
+      ),
     );
   }
 }

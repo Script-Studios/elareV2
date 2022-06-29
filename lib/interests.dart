@@ -86,7 +86,7 @@ class _SelectInterestsState extends State<SelectInterests> {
                   Navigator.of(context).pop();
                   Navigator.of(context).push(
                     MaterialPageRoute(
-                      builder: (context) => TutorialPage(),
+                      builder: (context) => TutorialPage(firstInstall: false),
                     ),
                   );
                   SharedPreferences preferences =

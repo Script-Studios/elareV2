@@ -9,51 +9,60 @@ import 'package:flutter_story_app_concept/cards.dart';
 import 'package:flutter_story_app_concept/dataClasses.dart';
 import 'package:flutter_story_app_concept/gameTimer.dart';
 import 'package:flutter_story_app_concept/main.dart';
+import 'package:flutter_story_app_concept/settingsPage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_animation_set/widget/transition_animations.dart';
 import 'package:flutter_animation_set/widget/behavior_animations.dart';
 
-class NewGame extends StatefulWidget {
+class NewVersusGame extends StatefulWidget {
   final List<GameTheme> themes;
+  String collId;
   final int mode; //0 for timed, 1 for endless
   List<ImageShow> images, shownImages;
   CardScrollWidget cards;
-  NewGame({
+  final User me;
+  final Friend f;
+  NewVersusGame({
     @required this.themes,
     @required this.images,
     @required this.shownImages,
     @required this.mode,
     @required this.cards,
+    @required this.collId,
+    @required this.me,
+    @required this.f,
   });
   @override
-  _NewGameState createState() => new _NewGameState(images, shownImages, cards);
+  _NewVersusGameState createState() =>
+      new _NewVersusGameState(images, shownImages, cards);
 }
 
 var cardAspectRatio = 12.0 / 16.0;
 var widgetAspectRatio = cardAspectRatio * 1.2;
-//var images = dataimages;
 
-class _NewGameState extends State<NewGame> with WidgetsBindingObserver {
-  _NewGameState(this.images, this.shownImages, this.cards);
+class _NewVersusGameState extends State<NewVersusGame>
+    with WidgetsBindingObserver {
+  _NewVersusGameState(this.images, this.shownImages, this.cards);
 
+  StreamSubscription gameStream;
   int initialLives = 3;
-  GameTimer t;
+  GameTimer t, oppT;
   CounterWidget cnt;
   Connectivity connect;
   List<CardScrollWidget> themes;
   CardScrollWidget cards;
   List<ImageShow> images, shownImages;
   List<Swipe> swipes;
-  int score;
-  int life = 3;
+  int score = 0, oppScore = 0;
   bool gameTutorialFinished;
   bool loading = false;
-  List<Widget> lives, lifeGone;
+  List<Widget> lives, lifeGone, oppLives, oppLifeGone;
   int imagesLoaded = 0;
   bool firstBackDone = false;
   Timer firstBackTimer;
-  bool started = false;
+  bool started = false, oppStarted = false;
   bool reverse = false;
+  DocumentReference scoreRef, lifeRef;
 
   void saveTotalPoints() async {
     SharedPreferences preferences = await SharedPreferences.getInstance();
@@ -79,10 +88,37 @@ class _NewGameState extends State<NewGame> with WidgetsBindingObserver {
     playBgm("gameOver.mp3");
   }
 
+  void updateScore() {
+    scoreRef.updateData({
+      'score': score,
+      'created': DateTime.now().toLocal().toString(),
+    });
+  }
+
+  void updateLife() {
+    lifeRef.updateData({
+      'life': lives.length,
+      'created': DateTime.now().toLocal().toString(),
+    });
+  }
+
+  void startTimer(bool opp) {
+    if (opp) {
+      if (!oppT.isActive()) oppT.startTimer();
+    } else {
+      if (!t.isActive()) t.startTimer();
+      Firestore.instance.collection(widget.collId).document().setData({
+        'type': 'startTimer',
+        'username': widget.me.username,
+        'created': DateTime.now().toLocal().toString(),
+      });
+    }
+  }
+
   void removeImage(int swipe) {
     int counter = cnt.counter;
     counter = min(counter, 5);
-    if (swipes.length == 0 && widget.mode == 1) t.startTimer();
+    if (swipes.length == 0 && widget.mode == 1) startTimer(false);
     var current = shownImages.removeLast();
     int correctSwipe = current.image.type;
     if (widget.mode == 2 && reverse) {
@@ -90,29 +126,19 @@ class _NewGameState extends State<NewGame> with WidgetsBindingObserver {
     }
     if (swipe == correctSwipe) {
       score += 2 * counter;
-      swipeAudio();
-      //(counterKey.currentState as MultipleDigitCounterState).value = score;
+      updateScore();
+      scoreRef.updateData({'score': score});
     } else if (widget.mode != 1) {
-      life -= 1;
       wrongSwipeAudio();
-      setState(() {
-        lives.removeLast();
-        lifeGone.add(
-          Expanded(
-            child: YYSingleLike(),
-          ),
-        );
-        lifeRemoved(initialLives - lives.length - 1);
-      });
+      lifeRemoved(initialLives - lives.length, false);
     }
     swipes.add(
       new Swipe(image: current, swipe: swipe),
     );
     if (images.length > 0) shownImages.insert(0, images.removeAt(0));
 
-    if (life == 0) {
-      stopBgm();
-      gameOverAudio();
+    if (lives.length == 0) {
+      updateGameOver();
       gameOver();
     }
     if (widget.mode == 2) setReverse();
@@ -120,39 +146,114 @@ class _NewGameState extends State<NewGame> with WidgetsBindingObserver {
     setState(() {});
   }
 
-  void lifeRemoved(int i) async {
+  void lifeRemoved(int i, bool opp) async {
+    setState(() {
+      if (opp) {
+        oppLives.removeLast();
+        oppLifeGone.add(
+          Expanded(
+            child: YYSingleLike(),
+          ),
+        );
+      } else {
+        lives.removeLast();
+        lifeGone.add(
+          Expanded(
+            child: YYSingleLike(),
+          ),
+        );
+      }
+    });
+    updateLife();
     await Future.delayed(Duration(milliseconds: 1500));
     setState(() {
-      lifeGone[i] = Spacer();
+      if (opp)
+        oppLifeGone[i] = Spacer();
+      else
+        lifeGone[i] = Spacer();
     });
   }
 
-  /* Future<void> shuffleImages() async {
-    widget.themes.forEach((theme) {
-      theme.images.forEach((image) {
-        images.add(
-          new ImageShow(
-            image: image,
-            imgIndex: theme.images.indexOf(image),
-            themeId: theme.id,
-            type0: theme.type0,
-            type1: theme.type1,
-          ),
-        );
-      });
+  void subscribeGameCollection() {
+    gameStream = Firestore.instance
+        .collection(widget.collId)
+        .snapshots()
+        .listen(recievedSp);
+  }
+
+  void recievedSp(QuerySnapshot sp) {
+    sp.documents.forEach((doc) {
+      var d = doc.data;
+      var date = DateTime.parse(d['created']), curr = DateTime.now();
+      if (date.difference(curr).inSeconds < 10) {
+        if (d['type'] == 'score') {
+          if (d['username'].toString() != widget.me.username) {
+            oppScore = int.parse(d['score'].toString());
+          }
+        } else if (d['type'] == 'life') {
+          if (d['username'].toString() != widget.me.username) {
+            int l = int.parse(d['life'].toString());
+            if (l < oppLives.length) {
+              for (int i = 0; i < oppLives.length - l; i++)
+                lifeRemoved(initialLives - oppLives.length, true);
+            }
+          }
+        } else if (d['type'] == 'start') {
+          if (d['username'].toString() != widget.me.username) {
+            oppStarted = true;
+            if (started) {
+              setState(() {});
+            }
+          }
+        } else if (d['type'] == 'startTimer') {
+          if (d['username'].toString() != widget.me.username) {
+            startTimer(true);
+          }
+        } else if (d['type'] == 'gameover') {
+          if (d['username'].toString() != widget.me.username) {
+            gameOver();
+          }
+        }
+      }
     });
-    images.shuffle();
-    for (int i = 0; i < 6; i++) {
-      shownImages.add(images.removeAt(i));
-    }
-    cards = new CardScrollWidget(removeImage, shownImages);
-    setState(() {});
-  } */
+  }
+
+  void setRefs() async {
+    scoreRef = Firestore.instance.collection(widget.collId).document();
+    scoreRef.setData({
+      'score': score,
+      'type': 'score',
+      'username': widget.me.username,
+      'created': DateTime.now().toLocal().toString(),
+    });
+    lifeRef = Firestore.instance.collection(widget.collId).document();
+    lifeRef.setData({
+      'life': lives.length,
+      'type': 'life',
+      'username': widget.me.username,
+      'created': DateTime.now().toLocal().toString(),
+    });
+  }
+
+  void deleteCol() async {
+    print("deleting Collection");
+    var sp = await Firestore.instance.collection(widget.collId).getDocuments();
+    sp.documents.forEach((doc) {
+      doc.reference.delete();
+    });
+  }
+
+  void updateGameOver() {
+    Firestore.instance.collection(widget.collId).document().setData({
+      'type': 'gameover',
+      'username': widget.me.username,
+      'created': DateTime.now().toLocal().toString(),
+    });
+  }
 
   void gameOver() {
-    setState(() {
-      started = false;
-    });
+    stopBgm();
+    gameOverAudio();
     if (widget.mode == 1) t.endTimer();
     saveTotalPoints();
     showDialog(
@@ -190,9 +291,8 @@ class _NewGameState extends State<NewGame> with WidgetsBindingObserver {
               onPressed: () {
                 stopBgm();
                 uploadGameStats();
-                Navigator.of(context).pop();
-                Navigator.of(context).pop();
-                Navigator.of(context).pushNamed('home');
+                Navigator.of(context)
+                    .pushNamedAndRemoveUntil('home', (route) => false);
               },
             ),
           ],
@@ -207,7 +307,8 @@ class _NewGameState extends State<NewGame> with WidgetsBindingObserver {
   void uploadGameStats() async {
     Firestore firestore = Firestore.instance;
     num mode = widget.mode;
-    Map<String, num> time = t.timePlayed();
+    Map<String, num> time;
+    if (widget.mode == 1) time = t.timePlayed();
     num pointsScored = score;
     SharedPreferences preferences = await SharedPreferences.getInstance();
     var username = preferences.getString("username");
@@ -280,21 +381,17 @@ class _NewGameState extends State<NewGame> with WidgetsBindingObserver {
     }
   }
 
-  void checkGameTutorialFinished() async {
-    SharedPreferences pref = await SharedPreferences.getInstance();
-    gameTutorialFinished = pref.getBool("gameTutorialFinished");
-    if (gameTutorialFinished == null) {
-      await pref.setBool("gameTutorialFinished", false);
-      gameTutorialFinished = false;
-    }
-    setState(() {});
-  }
-
   void startGame() async {
     await Future.delayed(Duration(milliseconds: 500));
-    setState(() {
-      started = true;
+    started = true;
+    Firestore.instance.collection(widget.collId).document().setData({
+      'type': 'start',
+      'username': widget.me.username,
+      'created': DateTime.now().toLocal().toString(),
     });
+    if (oppStarted) {
+      setState(() {});
+    }
   }
 
   void setReverse() {
@@ -322,7 +419,6 @@ class _NewGameState extends State<NewGame> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    checkGameTutorialFinished();
     cards.removeImage = removeImage;
     swipes = new List();
     score = 0;
@@ -337,21 +433,46 @@ class _NewGameState extends State<NewGame> with WidgetsBindingObserver {
         child: YYPumpingHeart(),
       ),
     ];
-    lifeGone = new List<Widget>();
-    //shuffleImages();
-    t = new GameTimer(
-      reverse: widget.mode == 1,
-      initDuration: widget.mode == 1
-          ? const Duration(
-              seconds: 30,
-            )
-          : null,
-      style: TextStyle(
-        color: Colors.white,
-        fontSize: 25,
+    oppLives = [
+      Expanded(
+        child: YYPumpingHeart(),
       ),
-      timerEnd: gameOver,
-    );
+      Expanded(
+        child: YYPumpingHeart(),
+      ),
+      Expanded(
+        child: YYPumpingHeart(),
+      ),
+    ];
+    lifeGone = new List<Widget>();
+    oppLifeGone = new List<Widget>();
+    subscribeGameCollection();
+    setRefs();
+    print("mode" + widget.mode.toString());
+    if (widget.mode == 1) {
+      t = new GameTimer(
+        reverse: true,
+        initDuration: const Duration(
+          seconds: 30,
+        ),
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: 25,
+        ),
+        timerEnd: gameOver,
+      );
+      oppT = new GameTimer(
+        reverse: widget.mode == 1,
+        initDuration: const Duration(
+          seconds: 30,
+        ),
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: 25,
+        ),
+        timerEnd: gameOver,
+      );
+    }
     cnt = new CounterWidget();
     loadAudio();
     if (widget.mode == 2) setReverse();
@@ -361,6 +482,8 @@ class _NewGameState extends State<NewGame> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    gameStream.cancel();
+    deleteCol();
     super.dispose();
   }
 
@@ -368,7 +491,7 @@ class _NewGameState extends State<NewGame> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     ImageShow current = shownImages.last;
     var stack = new IndexedStack(
-      index: 1, //loading ? 0 : 1,
+      index: started && oppStarted ? 1 : 0,
       children: <Widget>[
         Scaffold(
           backgroundColor: Colors.white,
@@ -376,7 +499,7 @@ class _NewGameState extends State<NewGame> with WidgetsBindingObserver {
             mainAxisAlignment: MainAxisAlignment.center,
             children: <Widget>[
               Text(
-                "LOADING YOUR GAME\n......",
+                !started ? "LOADING YOUR GAME\n......" : "Waiting for Opponent",
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: Colors.pink,
@@ -473,6 +596,112 @@ class _NewGameState extends State<NewGame> with WidgetsBindingObserver {
                     ),
                   ),
                 ),
+                Row(
+                  children: <Widget>[
+                    Expanded(
+                      child: Divider(
+                        color: Colors.white,
+                        thickness: 0.5,
+                      ),
+                    ),
+                    Column(
+                      children: <Widget>[
+                        Text(
+                          widget.me.username,
+                          style: TextStyle(
+                            color: Colors.white,
+                          ),
+                        ),
+                        Text(
+                          "v/s",
+                          style: TextStyle(
+                            color: Colors.white,
+                          ),
+                        ),
+                        Text(
+                          widget.f.username,
+                          style: TextStyle(
+                            color: Colors.white,
+                          ),
+                        ),
+                      ],
+                    ),
+                    Expanded(
+                      child: Divider(
+                        color: Colors.white,
+                        thickness: 0.5,
+                      ),
+                    )
+                  ],
+                ),
+                Expanded(
+                  flex: 2,
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: 20.0,
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: (widget.mode == 1
+                              ? <Widget>[
+                                  Expanded(
+                                    flex: 2,
+                                    child: Container(
+                                      padding: const EdgeInsets.only(
+                                          left: 12.0,
+                                          right: 12.0,
+                                          top: 8.0,
+                                          bottom: 8.0),
+                                      width: MediaQuery.of(context).size.width -
+                                          150,
+                                      decoration: BoxDecoration(
+                                        color: Color(0xFFff6e6e),
+                                        borderRadius:
+                                            BorderRadius.circular(20.0),
+                                      ),
+                                      child: Center(
+                                        child: Padding(
+                                          padding: EdgeInsets.symmetric(
+                                            horizontal: 22.0,
+                                            vertical: 6.0,
+                                          ),
+                                          child: oppT,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ]
+                              : oppLives + oppLifeGone.reversed.toList()) +
+                          <Widget>[
+                            Spacer(),
+                            Expanded(
+                              flex: 2,
+                              child: Container(
+                                height: 50,
+                                width: MediaQuery.of(context).size.width - 150,
+                                decoration: BoxDecoration(
+                                  color: Color(0xFFff6e6e),
+                                  borderRadius: BorderRadius.circular(20.0),
+                                ),
+                                child: Center(
+                                  child: Padding(
+                                    padding: EdgeInsets.symmetric(
+                                        horizontal: 22.0, vertical: 6.0),
+                                    child: AutoSizeText(
+                                      "$oppScore",
+                                      minFontSize: 25,
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                    ),
+                  ),
+                ),
                 Spacer(
                   flex: 1,
                 ),
@@ -513,6 +742,7 @@ class _NewGameState extends State<NewGame> with WidgetsBindingObserver {
                           flex: 6,
                           child: FlatButton(
                             onPressed: () {
+                              swipeAudio();
                               cards.card.swipeLeft();
                             },
                             child: Container(
@@ -548,6 +778,7 @@ class _NewGameState extends State<NewGame> with WidgetsBindingObserver {
                           flex: 6,
                           child: FlatButton(
                             onPressed: () {
+                              swipeAudio();
                               cards.card.swipeRight();
                             },
                             child: Container(
@@ -595,7 +826,7 @@ class _NewGameState extends State<NewGame> with WidgetsBindingObserver {
     );
     return WillPopScope(
         child: AnimatedOpacity(
-          opacity: started ? 1 : 0,
+          opacity: 1,
           duration: Duration(milliseconds: 500),
           child: stack,
         ),

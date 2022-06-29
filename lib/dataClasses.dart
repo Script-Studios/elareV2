@@ -1,4 +1,27 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+
+class Friend {
+  String username;
+  ProfilePicData profile;
+  String isFriend;
+  DocumentReference ref;
+  Friend({this.profile, this.username, this.isFriend, this.ref});
+}
+
+class StateData {
+  String name;
+  List<String> cities;
+  StateData(this.name, this.cities);
+}
+
+class ProfilePicData {
+  String link, id;
+  ProfilePicData.fromMap(Map<String, dynamic> data) {
+    this.id = data['id'];
+    this.link = data['url'];
+  }
+}
 
 class GameTheme {
   String id;
@@ -9,17 +32,21 @@ class GameTheme {
   String type0, type1;
   String coverUrl;
   String loc;
-  GameTheme(
-      {this.id,
-      this.images,
-      this.popularity,
-      this.rating,
-      this.timePlayed,
-      this.topPlayer,
-      this.topScore,
-      this.type0,
-      this.type1,
-      this.coverUrl});
+  List<int> minScore;
+  GameTheme({
+    this.id,
+    this.images,
+    this.popularity,
+    this.rating,
+    this.timePlayed,
+    this.topPlayer,
+    this.topScore,
+    this.type0,
+    this.type1,
+    this.coverUrl,
+    this.loc,
+    this.minScore,
+  });
   GameTheme.fromMap(Map<String, dynamic> data, {String location}) {
     this.images = new List.generate(
       data['images'].length,
@@ -39,6 +66,8 @@ class GameTheme {
     this.id = data['id'];
     this.coverUrl = data['cover'];
     this.loc = location;
+    this.minScore = [0, 0, 0];
+    //this.minScore = List<int>.generate(3, (i) => data['minScore'][i]);
   }
 }
 

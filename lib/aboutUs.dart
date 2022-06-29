@@ -1,5 +1,3 @@
-import 'dart:math';
-
 import 'package:auto_size_text/auto_size_text.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
@@ -20,13 +18,13 @@ class _AboutUsPageState extends State<AboutUsPage> {
             "He lets his code do the talk. He might come across as a very shy reserved person, but our team knows that he can really set fire in the water. He likes to live in the fable stories, waiting for his Cindrella. If it's gonna happen, it will happen.",
         name: "Harsh Lukka",
         url:
-            "https://firebasestorage.googleapis.com/v0/b/elare-bd2f2.appspot.com/o/users%2Fharsh.jpg?alt=media&token=4be71455-361c-470f-b141-701166f11c05",
+            "https://firebasestorage.googleapis.com/v0/b/elare-bd2f2.appspot.com/o/users%2Fharsh.jpg?alt=media&token=fd8ccef9-0b0f-4596-9dd7-5f61c260877c",
       ),
     );
     members.add(
       new Member(
         desc:
-            "Indian Times says \"Amazing Girl\" and \"A Lady of A Kind\". I am the stylist of this app. I personally take care of the diet, the logos, the designs and the physique. And as they, you can't remove the art from the artist, I have graphics in breakfast.",
+            "Indian Times says \"Amazing Girl\" and \"A Lady of A Kind\". I am the stylist of this app. I personally take care of the diet, the logos, the designs and the physique. And as they say, you can't remove the art from the artist, I have graphics in breakfast.",
         name: "Aastha Jain",
         url:
             "https://firebasestorage.googleapis.com/v0/b/elare-bd2f2.appspot.com/o/users%2Fastha.jpeg?alt=media&token=c5de904f-a4c2-42d7-b664-90c9daf74862",
@@ -81,10 +79,13 @@ class _AboutUsPageState extends State<AboutUsPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Color(0xff081c36),
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+      ),
       body: Column(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          Spacer(),
           Expanded(
             child: Center(
               child: AutoSizeText(

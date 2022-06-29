@@ -11,7 +11,7 @@ description: A new Flutter project.
 # In iOS, build-name is used as CFBundleShortVersionString while build-number used as CFBundleVersion.
 # Read more about iOS versioning at
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
-version: 1.0.0+1
+version: 1.0.0+3
 
 environment:
   sdk: ">=2.1.0 <3.0.0"
@@ -22,7 +22,7 @@ dependencies:
   auto_size_text: any
   connectivity: any
   firebase_storage: any
-  cloud_firestore: any
+  cloud_firestore: ^0.13.5
   cloud_functions: any
   firebase_auth: any
   google_sign_in: any
@@ -69,6 +69,9 @@ flutter:
     - family: AmaticSCBold
       fonts:
         - asset: assets/fonts/AmaticSC-Bold.ttf
+    - family: MeriendaBold
+      fonts:
+        - asset: assets/fonts/Merienda-Bold.ttf
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.io/assets-and-images/#resolution-aware.
   # For details regarding adding assets from package dependencies, see
